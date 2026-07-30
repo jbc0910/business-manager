@@ -11,42 +11,73 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const initAuth = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (data.session) {
-        setUser(data.session.user);
-        const { data: userProfile } = await supabase.from('perfiles').select('*').eq('id', data.session.user.id).maybeSingle();
-        setProfile(userProfile);
-        retryPendingImageDeletions();
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        
+        if (data.session) {
+          setUser(data.session.user);
+          const { data: userProfile, error: profileError } = await supabase
+            .from('perfiles')
+            .select('*')
+            .eq('id', data.session.user.id)
+            .maybeSingle();
+            
+          if (profileError) console.error('[AuthContext] Error fetching profile:', profileError);
+          setProfile(userProfile);
+          retryPendingImageDeletions();
+        }
+      } catch (err) {
+        console.error('[AuthContext] Error in initAuth:', err);
+      } finally {
+        setIsGlobalLoading(false);
       }
-      setIsGlobalLoading(false);
     };
     initAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        let { data: userProfile } = await supabase.from('perfiles').select('*').eq('id', session.user.id).maybeSingle();
-        
-        // Si el perfil aún no existe (ej. recién registrado y RegisterScreen aún no termina el upsert)
-        if (!userProfile && event === 'SIGNED_IN') {
-          for (let i = 0; i < 4; i++) {
-            await new Promise(r => setTimeout(r, 1000));
-            const res = await supabase.from('perfiles').select('*').eq('id', session.user.id).maybeSingle();
-            if (res.data) {
-              userProfile = res.data;
+      try {
+        if (session?.user) {
+          let userProfile = null;
+          let retries = 0;
+          let delay = 1000;
+          
+          while (retries < 5 && !userProfile) {
+            const { data, error } = await supabase
+              .from('perfiles')
+              .select('*')
+              .eq('id', session.user.id)
+              .maybeSingle();
+              
+            if (error) {
+              console.error('[AuthContext] Error fetching profile on state change:', error);
+              break; // If real error, don't keep polling
+            }
+            
+            if (data) {
+              userProfile = data;
               break;
             }
+            
+            if (event !== 'SIGNED_IN') break; // Only poll on fresh sign in
+            
+            await new Promise(r => setTimeout(r, delay));
+            retries++;
+            delay *= 1.5; // Exponential backoff
           }
-        }
 
-        setProfile(userProfile || null);
-        setUser(session.user);
-        
-        if (event === 'SIGNED_IN') {
-          retryPendingImageDeletions();
+          setProfile(userProfile || null);
+          setUser(session.user);
+          
+          if (event === 'SIGNED_IN') {
+            retryPendingImageDeletions();
+          }
+        } else {
+          setUser(null);
+          setProfile(null);
         }
-      } else {
-        setUser(null);
-        setProfile(null);
+      } catch (err) {
+        console.error('[AuthContext] Error in onAuthStateChange:', err);
       }
     });
 

@@ -55,6 +55,10 @@ export default function CartScreen({ route, navigation }) {
       Alert.alert('Faltan datos', 'Por favor ingresa tu nombre.');
       return;
     }
+    if (!direccion.trim()) {
+      Alert.alert('Faltan datos', 'Por favor ingresa una dirección de entrega.');
+      return;
+    }
     if (!tienda?.telefono_whatsapp) {
       Alert.alert('Error', 'Esta tienda no tiene un número de WhatsApp configurado.');
       return;

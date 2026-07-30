@@ -142,9 +142,15 @@ const promoProducts = allProducts.filter(p => p.precio_oferta && p.precio_oferta
                         <span class="text-[#717973] text-[11px] line-through">${promo.precio.toLocaleString('es-CO')}</span>
                       </div>
                     </div>
-                    <button class="add-to-cart-btn mt-2 h-7 bg-[#e7e8e9] text-[#012d1d] text-[12px] font-bold rounded-lg active:scale-95 transition-transform" data-id={promo.id}>
-                      + Agregar
-                    </button>
+                    {promo.stock > 0 ? (
+                      <button class="add-to-cart-btn mt-2 h-7 bg-[#e7e8e9] text-[#012d1d] text-[12px] font-bold rounded-lg active:scale-95 transition-transform" data-id={promo.id}>
+                        + Agregar
+                      </button>
+                    ) : (
+                      <span class="mt-2 h-7 flex items-center justify-center bg-[#f87171]/20 text-[#ba1a1a] text-[12px] font-bold rounded-lg">
+                        Agotado
+                      </span>
+                    )}
                   </div>
                 </div>
               ))}
@@ -185,9 +191,15 @@ const promoProducts = allProducts.filter(p => p.precio_oferta && p.precio_oferta
                     <button class="increase-btn w-8 h-full flex items-center justify-center text-[#414844] active:bg-gray-200" data-id={product.id}>+</button>
                   </div>
                   
-                  <button class="add-to-cart-btn w-full h-9 bg-[#1b4332] text-white text-[13px] font-bold rounded-xl shadow-sm active:scale-95 transition-transform" data-id={product.id}>
-                    Agregar
-                  </button>
+                  {product.stock > 0 ? (
+                    <button class="add-to-cart-btn w-full h-9 bg-[#1b4332] text-white text-[13px] font-bold rounded-xl shadow-sm active:scale-95 transition-transform" data-id={product.id}>
+                      Agregar
+                    </button>
+                  ) : (
+                    <div class="w-full h-9 bg-[#f87171]/20 text-[#ba1a1a] flex items-center justify-center text-[13px] font-bold rounded-xl">
+                      Agotado
+                    </div>
+                  )}
                 </div>
               </article>
             ))}
@@ -675,7 +687,8 @@ const promoProducts = allProducts.filter(p => p.precio_oferta && p.precio_oferta
           text += `%0A*Sigue tu pedido aquí:* ${rastreoUrl}%0A`;
         }
         
-        const rawPhone = whatsappNumber.replace(/\D/g, ''); 
+        let rawPhone = whatsappNumber.replace(/\D/g, ''); 
+        if (rawPhone.length === 10) rawPhone = '57' + rawPhone;
         const url = `https://api.whatsapp.com/send/?phone=${rawPhone}&text=${text}`;
         
         // Abrir WhatsApp en nueva pestaña

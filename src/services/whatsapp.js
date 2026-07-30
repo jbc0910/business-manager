@@ -2,7 +2,10 @@ import { Linking } from 'react-native';
 
 export const generarEnlaceWhatsApp = (telefono, mensaje) => {
   // Aseguramos que el teléfono solo tenga números
-  const telLimpio = telefono.replace(/\D/g, '');
+  let telLimpio = telefono.replace(/\D/g, '');
+  if (telLimpio.length === 10) {
+    telLimpio = '57' + telLimpio; // Por defecto Colombia si no tiene código de país
+  }
   
   // Codificamos el mensaje para URL
   const mensajeCodificado = encodeURIComponent(mensaje);

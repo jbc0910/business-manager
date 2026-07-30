@@ -19,17 +19,8 @@ CREATE TABLE IF NOT EXISTS public.pedidos (
 ALTER TABLE public.pedidos ENABLE ROW LEVEL SECURITY;
 
 -- 3. Políticas RLS
--- A. Permitir inserciones públicas (anon) desde la web
-CREATE POLICY "Permitir crear pedidos al publico" 
-ON public.pedidos FOR INSERT 
-TO anon 
-WITH CHECK (true);
-
--- B. Permitir lectura pública (anon) si conocen el ID del pedido (para la pantalla de rastreo web)
-CREATE POLICY "Permitir leer pedido por ID al publico" 
-ON public.pedidos FOR SELECT 
-TO anon 
-USING (true);
+-- B. Permitir al administrador ver todos los pedidos de SU tienda
+-- (Políticas públicas eliminadas por seguridad)
 
 -- C. Permitir al administrador ver todos los pedidos de SU tienda
 CREATE POLICY "Admins pueden ver pedidos de su tienda" 

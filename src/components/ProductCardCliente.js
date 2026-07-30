@@ -60,7 +60,11 @@ export const ProductCardCliente = ({ producto }) => {
       </View>
 
       <View style={styles.controlsRow}>
-        {cantidad > 0 ? (
+        {producto.stock <= 0 ? (
+          <View style={styles.btnAgotado}>
+            <Text style={styles.btnAgotadoText}>Agotado</Text>
+          </View>
+        ) : cantidad > 0 ? (
           <View style={styles.counterGroup}>
             <TouchableOpacity 
               style={styles.btnMinus} 
@@ -209,5 +213,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: theme.rounded.sm,
     width: 36,
+  },
+  btnAgotado: {
+    backgroundColor: 'rgba(248,113,113,0.2)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    borderRadius: theme.rounded.sm,
+  },
+  btnAgotadoText: {
+    color: '#ba1a1a',
+    fontWeight: '700',
+    fontSize: 14,
   },
 });
