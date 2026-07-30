@@ -21,6 +21,9 @@ WebBrowser.maybeCompleteAuthSession();
 export default function RegisterScreen({ navigation }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [nombre, setNombre] = useState('');
+  const [rol, setRol] = useState('Administrador'); // 'Administrador' | 'Domiciliario'
+  const [tiendaSlug, setTiendaSlug] = useState('');
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [globalError, setGlobalError] = useState('');
@@ -28,10 +31,16 @@ export default function RegisterScreen({ navigation }) {
   /** Validación básica del formulario */
   const validate = () => {
     const newErrors = {};
+    if (!nombre.trim()) newErrors.nombre = 'El nombre es requerido';
     if (!email.trim()) newErrors.email = 'El email es requerido';
     else if (!/\S+@\S+\.\S+/.test(email)) newErrors.email = 'Email inválido';
     if (!password) newErrors.password = 'La contraseña es requerida';
     else if (password.length < 6) newErrors.password = 'Mínimo 6 caracteres';
+    
+    if (rol === 'Domiciliario' && !tiendaSlug.trim()) {
+      newErrors.tiendaSlug = 'El código de tienda es requerido';
+    }
+    
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -63,10 +72,33 @@ export default function RegisterScreen({ navigation }) {
         return;
       }
 
-      // La creación de la tienda ocurre en SetupTiendaScreen (paso obligatorio
-      // siguiente). Si Supabase ya generó una sesión (confirmación de email
-      // deshabilitada), onAuthStateChange en AppContext detecta el login y
-      // navega automáticamente a SetupTienda al no encontrar tienda asociada.
+      let assignedTiendaId = null;
+      if (rol === 'Domiciliario') {
+        const { data: storeData, error: storeError } = await supabase
+          .from('tiendas')
+          .select('id')
+          .eq('slug', tiendaSlug.trim().toLowerCase())
+          .maybeSingle();
+          
+        if (storeError || !storeData) {
+          setGlobalError('No se encontró ninguna tienda con ese código.');
+          return;
+        }
+        assignedTiendaId = storeData.id;
+      }
+
+      // Upsert profile
+      const { error: profileError } = await supabase.from('perfiles').upsert({
+        id: newUser.id,
+        nombre: nombre.trim(),
+        rol: rol,
+        tienda_id: assignedTiendaId
+      });
+
+      if (profileError) {
+        console.error('[RegisterScreen] Error guardando perfil:', profileError);
+      }
+
       if (!data?.session) {
         setGlobalError('Cuenta creada. Revisa tu email para confirmar el acceso.');
       }
@@ -135,7 +167,7 @@ export default function RegisterScreen({ navigation }) {
 
           <Text style={styles.title}>Crear Cuenta</Text>
           <Text style={styles.subtitle}>
-            Registra tu tienda y empieza a vender en tu barrio.
+            Únete a la plataforma para administrar o repartir.
           </Text>
 
           {/* Toggle Login / Register */}
@@ -148,6 +180,22 @@ export default function RegisterScreen({ navigation }) {
             </TouchableOpacity>
             <TouchableOpacity style={[styles.toggleButton, styles.toggleActive]}>
               <Text style={styles.toggleTextActive}>Register</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Toggle Role */}
+          <View style={styles.toggleContainer}>
+            <TouchableOpacity
+              style={[styles.toggleButton, rol === 'Administrador' && styles.toggleActive]}
+              onPress={() => setRol('Administrador')}
+            >
+              <Text style={rol === 'Administrador' ? styles.toggleTextActive : styles.toggleText}>Soy Tendero</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.toggleButton, rol === 'Domiciliario' && styles.toggleActive]}
+              onPress={() => setRol('Domiciliario')}
+            >
+              <Text style={rol === 'Domiciliario' ? styles.toggleTextActive : styles.toggleText}>Soy Domiciliario</Text>
             </TouchableOpacity>
           </View>
 
@@ -164,6 +212,32 @@ export default function RegisterScreen({ navigation }) {
                 <Text style={styles.errorBannerText}>{globalError}</Text>
               </View>
             ) : null}
+
+            <Input
+              label="Nombre Completo"
+              icon="account-outline"
+              placeholder="Ej. Juan Pérez"
+              value={nombre}
+              onChangeText={(t) => {
+                setNombre(t);
+                setErrors((e) => ({ ...e, nombre: undefined }));
+              }}
+              error={errors.nombre}
+            />
+
+            {rol === 'Domiciliario' && (
+              <Input
+                label="Código de la Tienda (Slug)"
+                icon="store-search-outline"
+                placeholder="ej: mi-tienda-local"
+                value={tiendaSlug}
+                onChangeText={(t) => {
+                  setTiendaSlug(t);
+                  setErrors((e) => ({ ...e, tiendaSlug: undefined }));
+                }}
+                error={errors.tiendaSlug}
+              />
+            )}
 
             <Input
               label="Email"

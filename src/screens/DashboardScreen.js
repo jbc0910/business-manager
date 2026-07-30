@@ -6,6 +6,7 @@ import { theme } from '../styles/theme';
 import ProductosAdminScreen from './ProductosAdminScreen';
 import CategoriasAdminScreen from './CategoriasAdminScreen';
 import TiendaAdminScreen from './TiendaAdminScreen';
+import PedidosAdminScreen from './PedidosAdminScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -29,6 +30,16 @@ export default function DashboardScreen() {
         }
       }}
     >
+      <Tab.Screen 
+        name="PedidosTab" 
+        component={PedidosAdminScreen}
+        options={{
+          tabBarLabel: 'Pedidos',
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="clipboard-text" size={size} color={color} />
+          ),
+        }}
+      />
       <Tab.Screen 
         name="ProductosTab" 
         component={ProductosAdminScreen}

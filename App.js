@@ -23,12 +23,14 @@ import SetupTiendaScreen from '@/screens/SetupTiendaScreen';
 import DashboardScreen from '@/screens/DashboardScreen';
 import CatalogoScreen from '@/screens/CatalogoScreen';
 import CartScreen from '@/screens/CartScreen';
+import DomiciliarioDashboardScreen from '@/screens/DomiciliarioDashboardScreen';
+import RastreoActivoScreen from '@/screens/Repartidor/RastreoActivoScreen';
 import { CartProvider } from '@/context/CartContext';
 
 const Stack = createNativeStackNavigator();
 
 const RootNavigator = () => {
-  const { user, isGlobalLoading } = useAuth();
+  const { user, profile, isGlobalLoading } = useAuth();
   const { tienda } = useTienda();
 
   if (isGlobalLoading) {
@@ -46,6 +48,11 @@ const RootNavigator = () => {
           <Stack.Screen name="Login" component={LoginScreen} />
           <Stack.Screen name="Register" component={RegisterScreen} />
           <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+        </>
+      ) : profile?.rol === 'Domiciliario' ? (
+        <>
+          <Stack.Screen name="DomiciliarioDashboard" component={DomiciliarioDashboardScreen} />
+          <Stack.Screen name="RastreoActivo" component={RastreoActivoScreen} />
         </>
       ) : !tienda ? (
         <Stack.Screen name="SetupTienda" component={SetupTiendaScreen} />

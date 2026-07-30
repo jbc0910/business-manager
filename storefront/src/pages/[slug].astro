@@ -1,0 +1,701 @@
+---
+import { supabase } from '../lib/supabase';
+import '../styles/global.css';
+
+const { slug } = Astro.params;
+
+// Fetch store data
+const { data: tienda, error: tiendaError } = await supabase
+  .from('tiendas')
+  .select('id, slug, nombre_tienda, telefono_whatsapp, dominio_personalizado, horario_atencion, metodos_pago')
+  .eq('slug', slug)
+  .single();
+
+if (tiendaError || !tienda) {
+  return new Response(`Error: ${tiendaError ? tiendaError.message : 'Tienda no encontrada'}`, { status: 404 });
+}
+
+// Fetch products
+const { data: productos, error: productosError } = await supabase
+  .from('productos')
+  .select('id, tienda_id, nombre, precio, stock, imagen_url, categoria, precio_oferta, categoria_id')
+  .eq('tienda_id', tienda.id);
+
+if (productosError) {
+  console.error("Error fetching products:", productosError);
+}
+
+const allProducts = productos || [];
+// Obtener categorías únicas dinámicamente, y añadir un ícono por defecto
+const rawCategories = Array.from(new Set(allProducts.map(p => p.categoria).filter(Boolean)));
+const defaultIcons: Record<string, string> = {
+  'lácteos': 'egg_alt',
+  'lacteos': 'egg_alt',
+  'bebidas': 'local_cafe',
+  'snacks': 'cookie',
+  'frutas': 'nutrition',
+  'limpieza': 'cleaning_services',
+  'panadería': 'bakery_dining',
+  'panaderia': 'bakery_dining'
+};
+
+const categories = rawCategories.map(cat => ({
+  name: cat,
+  icon: defaultIcons[cat.toLowerCase()] || 'category'
+}));
+
+// Separar ofertas si tienen precio_oferta válido y mayor a 0
+const promoProducts = allProducts.filter(p => p.precio_oferta && p.precio_oferta > 0 && p.precio_oferta < p.precio);
+---
+
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#012d1d" />
+    <title>{tienda.nombre_tienda} | Tu Mercado Local Online</title>
+    
+    <!-- Google Fonts & Material Symbols -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Be+Vietnam+Pro:wght@400;500;600;700&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet">
+    
+    <style>
+      .font-jakarta { font-family: 'Plus Jakarta Sans', sans-serif; }
+      body { font-family: 'Be Vietnam Pro', sans-serif; }
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      .shadow-card { box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+      .shadow-elevated { box-shadow: 0 -4px 16px rgba(0,0,0,0.08); }
+      .shadow-orange { box-shadow: 0 4px 12px rgba(253,134,3,0.3); }
+      
+      .category-chip[aria-selected="true"] { background-color: #1b4332; color: #86af99; }
+      .category-chip[aria-selected="false"] { background-color: #e7e8e9; color: #414844; }
+    </style>
+  </head>
+
+  <body class="bg-[#f8f9fa] text-[#191c1d]">
+    <div class="w-full max-w-[480px] mx-auto min-h-dvh flex flex-col relative overflow-x-hidden">
+      
+      <!-- HEADER -->
+      <header id="main-header" class="sticky top-0 z-40 bg-[#f8f9fa] shadow-card transition-transform duration-300">
+        <div class="flex items-center justify-between px-4 pt-4 pb-2">
+          <!-- Brand -->
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-[#012d1d] text-[28px]">storefront</span>
+            <h1 id="store-brand-name" class="font-jakarta text-[22px] font-bold text-[#012d1d] leading-none">{tienda.nombre_tienda}</h1>
+          </div>
+          <!-- Cart button -->
+          <button id="open-cart-btn" class="relative p-2 active:scale-90 transition-transform" aria-label="Ver carrito">
+            <span class="material-symbols-outlined text-[#414844] text-[28px]">shopping_cart</span>
+            <span id="cart-badge-header" class="hidden absolute -top-0.5 -right-0.5 bg-[#fd8603] text-[#5f2f00] text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-[#f8f9fa]">0</span>
+          </button>
+        </div>
+        
+        <!-- Search Bar -->
+        <div class="px-4 pb-3">
+          <div class="relative group">
+            <span class="absolute inset-y-0 left-3 flex items-center text-[#717973] pointer-events-none group-focus-within:text-[#012d1d] transition-colors">
+              <span class="material-symbols-outlined text-[20px]">search</span>
+            </span>
+            <input id="search-input" type="search" placeholder="¿Qué necesitas hoy?" class="w-full h-11 pl-10 pr-4 bg-[#edeeef] rounded-full border-none focus:outline-none focus:ring-2 focus:ring-[#012d1d]/30 text-[14px] placeholder:text-[#c1c8c2] transition-all">
+          </div>
+        </div>
+      </header>
+      
+      <main class="flex-1 pb-24">
+        <!-- CATEGORY SLIDER -->
+        <div class="pt-4 pb-2">
+          <section aria-label="Filtrar por categoría">
+            <div id="category-slider" class="flex gap-3 overflow-x-auto no-scrollbar px-4 py-1 snap-x snap-mandatory">
+              <button class="category-chip flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-full text-[13px] font-semibold transition-all duration-200 active:scale-95 snap-start" data-category="all" aria-selected="true">
+                <span class="material-symbols-outlined text-[18px]">apps</span> Todos
+              </button>
+              {categories.map(cat => (
+                <button class="category-chip flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-full text-[13px] font-semibold transition-all duration-200 active:scale-95 snap-start" data-category={cat.name} aria-selected="false">
+                  <span class="material-symbols-outlined text-[18px]">{cat.icon}</span> {cat.name}
+                </button>
+              ))}
+            </div>
+          </section>
+        </div>
+
+        <!-- PROMOS CAROUSEL -->
+        {promoProducts.length > 0 && (
+          <section class="mt-4" id="promos-section">
+            <div class="flex items-center justify-between px-4 mb-3">
+              <h2 class="font-jakarta text-[20px] font-bold text-[#012d1d]">Ofertas del Día</h2>
+            </div>
+            <div class="flex overflow-x-auto no-scrollbar gap-4 px-4 snap-x snap-mandatory pb-1">
+              {promoProducts.map(promo => (
+                <div class="flex-shrink-0 w-64 snap-start bg-white rounded-2xl p-3 shadow-card border border-gray-100 flex gap-3 items-center">
+                  <div class="w-20 h-20 bg-gray-100 rounded-xl overflow-hidden flex-shrink-0">
+                    {promo.imagen_url ? 
+                      <img src={promo.imagen_url} alt={promo.nombre} class="w-full h-full object-cover" loading="lazy" /> : 
+                      <span class="material-symbols-outlined text-[#c1c8c2] m-auto flex h-full items-center justify-center text-[32px]">image</span>}
+                  </div>
+                  <div class="flex-1 flex flex-col justify-between">
+                    <div>
+                      <h3 class="text-[13px] font-bold text-[#191c1d] leading-tight line-clamp-2">{promo.nombre}</h3>
+                      <div class="mt-1 flex items-baseline gap-1.5">
+                        <span class="text-[#ba1a1a] font-bold text-[15px]">${promo.precio_oferta?.toLocaleString('es-CO')}</span>
+                        <span class="text-[#717973] text-[11px] line-through">${promo.precio.toLocaleString('es-CO')}</span>
+                      </div>
+                    </div>
+                    <button class="add-to-cart-btn mt-2 h-7 bg-[#e7e8e9] text-[#012d1d] text-[12px] font-bold rounded-lg active:scale-95 transition-transform" data-id={promo.id}>
+                      + Agregar
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        <!-- PRODUCTS GRID -->
+        <section class="mt-6 px-4">
+          <h2 class="font-jakarta text-[20px] font-bold text-[#012d1d] mb-4">Todos los Productos</h2>
+          <div id="products-grid" class="grid grid-cols-2 gap-3">
+            {allProducts.map(product => (
+              <article class="product-card bg-white rounded-2xl p-3 shadow-card border border-gray-100 flex flex-col" data-category={product.categoria} data-name={product.nombre.toLowerCase()}>
+                <div class="w-full aspect-square bg-gray-100 rounded-xl mb-3 overflow-hidden relative">
+                  {product.imagen_url ? 
+                    <img src={product.imagen_url} alt={product.nombre} class="w-full h-full object-cover" loading="lazy" /> :
+                    <span class="material-symbols-outlined text-[#c1c8c2] m-auto flex h-full items-center justify-center text-[40px]">image</span>}
+                  {product.precio_oferta && product.precio_oferta > 0 && (
+                    <span class="absolute top-2 left-2 bg-[#ba1a1a] text-white text-[10px] font-bold px-2 py-1 rounded-md">OFERTA</span>
+                  )}
+                </div>
+                <h3 class="text-[14px] font-bold text-[#191c1d] leading-tight flex-1 mb-2">{product.nombre}</h3>
+                
+                <div class="mt-auto">
+                  {product.precio_oferta && product.precio_oferta > 0 ? (
+                    <div class="flex flex-col mb-2">
+                      <span class="text-[#ba1a1a] font-bold text-[16px] leading-none">${product.precio_oferta.toLocaleString('es-CO')}</span>
+                      <span class="text-[#717973] text-[11px] line-through mt-0.5">${product.precio.toLocaleString('es-CO')}</span>
+                    </div>
+                  ) : (
+                    <div class="font-bold text-[#012d1d] text-[16px] mb-2">${product.precio.toLocaleString('es-CO')}</div>
+                  )}
+                  
+                  <!-- Quantity Control (Hidden by default, shown when in cart) -->
+                  <div class="qty-control hidden items-center justify-between bg-[#f8f9fa] border border-[#e7e8e9] rounded-xl overflow-hidden h-9">
+                    <button class="decrease-btn w-8 h-full flex items-center justify-center text-[#414844] active:bg-gray-200" data-id={product.id}>-</button>
+                    <span class="qty-value text-[13px] font-bold w-6 text-center" data-id={product.id}>1</span>
+                    <button class="increase-btn w-8 h-full flex items-center justify-center text-[#414844] active:bg-gray-200" data-id={product.id}>+</button>
+                  </div>
+                  
+                  <button class="add-to-cart-btn w-full h-9 bg-[#1b4332] text-white text-[13px] font-bold rounded-xl shadow-sm active:scale-95 transition-transform" data-id={product.id}>
+                    Agregar
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+          
+          <div id="no-results" class="hidden text-center py-12">
+            <span class="material-symbols-outlined text-[48px] text-[#c1c8c2]">search_off</span>
+            <p class="text-[#717973] mt-2 text-[14px]">No encontramos productos para esta búsqueda.</p>
+          </div>
+        </section>
+      </main>
+
+      <!-- BOTTOM NAVIGATION -->
+      <nav class="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] z-30 bg-white border-t border-[#c1c8c2] rounded-t-2xl shadow-elevated">
+        <div class="flex justify-around items-center h-16 px-6">
+          <button class="flex flex-col items-center gap-0.5 bg-[#1b4332] text-[#86af99] rounded-2xl px-6 py-1.5 active:scale-90 transition-all" onclick="window.scrollTo(0,0)">
+            <span class="material-symbols-outlined text-[22px]" style="font-variation-settings:'FILL' 1">home</span>
+            <span class="text-[10px] font-semibold">Inicio</span>
+          </button>
+          <button id="open-cart-nav" class="flex flex-col items-center gap-0.5 text-[#414844] hover:text-[#012d1d] px-6 py-1.5 active:scale-90 transition-all relative">
+            <span class="material-symbols-outlined text-[22px]">shopping_cart</span>
+            <span class="text-[10px] font-semibold">Carrito</span>
+            <span id="nav-badge" class="hidden absolute -top-0.5 right-3 bg-[#fd8603] text-[#5f2f00] text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">0</span>
+          </button>
+        </div>
+      </nav>
+
+      <!-- CART OVERLAY & SIDEBAR -->
+      <div id="cart-overlay" class="fixed inset-0 bg-black/50 z-[50] hidden transition-opacity opacity-0"></div>
+      
+      <aside id="cart-panel" class="fixed top-0 right-0 h-full w-full max-w-[480px] bg-[#f8f9fa] z-[60] flex flex-col shadow-[-4px_0_24px_rgba(0,0,0,0.12)] transform translate-x-full transition-transform duration-300">
+        <!-- Header -->
+        <div class="flex items-center justify-between px-4 py-4 bg-[#012d1d] text-white">
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined">shopping_cart</span>
+            <h2 class="font-jakarta text-[18px] font-bold">Mi Carrito</h2>
+          </div>
+          <button id="close-cart-btn" class="p-1 active:scale-90 transition-transform">
+            <span class="material-symbols-outlined text-[24px]">close</span>
+          </button>
+        </div>
+        
+        <div class="flex-1 overflow-y-auto flex flex-col">
+          <!-- Empty State -->
+          <div id="cart-empty" class="flex flex-col items-center justify-center flex-1 px-8 text-center">
+            <span class="material-symbols-outlined text-[56px] text-[#c1c8c2]">shopping_cart</span>
+            <p class="text-[#414844] font-semibold mt-3">Tu carrito está vacío</p>
+            <p class="text-[#717973] text-[13px] mt-1">Agrega productos desde el catálogo</p>
+          </div>
+          
+          <!-- Items List -->
+          <div id="cart-items-list" class="hidden px-4 pt-4 pb-4 space-y-3"></div>
+          
+          <!-- Checkout Form -->
+          <div id="cart-form-section" class="hidden px-4 pt-2 pb-8 flex-1 bg-white border-t border-gray-200 mt-4">
+            <h3 class="font-jakarta text-[18px] font-bold text-[#191c1d] mb-4 mt-4">Datos de Entrega</h3>
+            <form id="checkout-form" class="space-y-4">
+              <div class="flex flex-col gap-1">
+                <label class="text-[13px] font-semibold text-[#414844]">Nombre <span class="text-[#ba1a1a]">*</span></label>
+                <input id="checkout-name" type="text" required class="w-full h-11 px-4 rounded-xl bg-[#f8f9fa] border border-[#c1c8c2] focus:border-[#012d1d] focus:ring-2 focus:ring-[#012d1d]/20 outline-none text-[14px]">
+              </div>
+              <div class="flex flex-col gap-1">
+                <label class="text-[13px] font-semibold text-[#414844]">Dirección / Conjunto <span class="text-[#ba1a1a]">*</span></label>
+                <input id="checkout-address" type="text" required class="w-full h-11 px-4 rounded-xl bg-[#f8f9fa] border border-[#c1c8c2] focus:border-[#012d1d] focus:ring-2 focus:ring-[#012d1d]/20 outline-none text-[14px]">
+              </div>
+              <div class="flex flex-col gap-1">
+                <label class="text-[13px] font-semibold text-[#414844]">Apto / Torre / Bloque (Opcional)</label>
+                <input id="checkout-apt" type="text" class="w-full h-11 px-4 rounded-xl bg-[#f8f9fa] border border-[#c1c8c2] focus:border-[#012d1d] focus:ring-2 focus:ring-[#012d1d]/20 outline-none text-[14px]">
+              </div>
+              
+              <h3 class="font-jakarta text-[18px] font-bold text-[#191c1d] mt-6 mb-2">Método de Pago</h3>
+              <div class="grid grid-cols-2 gap-3 mb-4">
+                <button type="button" class="payment-opt border-2 border-[#012d1d] bg-[#f0f7f3] text-[#012d1d] rounded-xl py-3 font-semibold text-[13px] flex flex-col items-center gap-1 active:scale-95 transition-all" data-method="Efectivo">
+                  <span class="material-symbols-outlined">payments</span> Efectivo
+                </button>
+                <button type="button" class="payment-opt border border-[#c1c8c2] bg-white text-[#414844] rounded-xl py-3 font-semibold text-[13px] flex flex-col items-center gap-1 active:scale-95 transition-all" data-method="Transferencia">
+                  <span class="material-symbols-outlined">account_balance</span> Transferencia
+                </button>
+              </div>
+
+              <!-- Opciones dinámicas de pago -->
+              <div id="efectivo-options" class="flex flex-col gap-1 mb-4">
+                <label class="text-[13px] font-semibold text-[#414844]">¿Con cuánto vas a pagar?</label>
+                <input id="checkout-cash" type="number" placeholder="Ej. 50000" class="w-full h-11 px-4 rounded-xl bg-[#f8f9fa] border border-[#c1c8c2] focus:border-[#012d1d] focus:ring-2 focus:ring-[#012d1d]/20 outline-none text-[14px]">
+              </div>
+
+              <div id="transferencia-options" class="hidden mb-4 bg-[#c1ecd4] rounded-xl p-4 border border-[#a5d0b9]">
+                <div class="flex items-start gap-3">
+                  <span class="material-symbols-outlined text-[#012d1d] flex-shrink-0 mt-0.5">info</span>
+                  <div class="w-full">
+                    <p class="text-[13px] font-bold text-[#012d1d] mb-2">Datos para transferencia</p>
+                    <ul id="bank-accounts-list" class="space-y-3 mb-3">
+                      {tienda.metodos_pago && tienda.metodos_pago.length > 0 ? (
+                        tienda.metodos_pago.map((metodo: any) => {
+                          let bgColor = '#012d1d';
+                          let textColor = '#ffffff';
+                          let icon = 'account_balance';
+                          
+                          const b = metodo.banco.toLowerCase();
+                          if (b.includes('nequi')) {
+                            bgColor = '#4a0048';
+                            icon = 'smartphone';
+                          } else if (b.includes('davi')) {
+                            bgColor = '#ed1c24';
+                            icon = 'account_balance';
+                          } else if (b.includes('bancolombia')) {
+                            bgColor = '#fdc700'; 
+                            textColor = '#191c1d';
+                            icon = 'account_balance';
+                          } else if (b.includes('ahorro a la mano') || b.includes('bancolombia a la mano')) {
+                            bgColor = '#fdc700'; 
+                            textColor = '#191c1d';
+                            icon = 'smartphone';
+                          }
+
+                          return (
+                            <li class="flex items-center gap-3">
+                              <div class="w-10 h-10 rounded-xl flex items-center justify-center" style={`background-color: ${bgColor}; color: ${textColor};`}>
+                                <span class="material-symbols-outlined text-[20px]">{icon}</span>
+                              </div>
+                              <div>
+                                <p class="text-[#012d1d] font-bold text-[14px] leading-tight mb-0.5">{metodo.banco}</p>
+                                <p class="text-[#414844] text-[12px] leading-tight">{metodo.titular} • {metodo.numero}</p>
+                              </div>
+                            </li>
+                          )
+                        })
+                      ) : (
+                        <p class="text-[#717973] text-[12px] italic">No hay cuentas bancarias registradas en esta tienda.</p>
+                      )}
+                    </ul>
+                    <p class="text-[11px] text-[#414844]">Envía el comprobante por WhatsApp.</p>
+                  </div>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- Footer Checkout -->
+        <div id="cart-footer" class="hidden border-t border-[#c1c8c2] bg-white px-4 pt-3 pb-5">
+          <div class="flex justify-between text-[14px] text-[#414844] mb-1">
+            <span>Subtotal</span> <span id="cart-subtotal">$0</span>
+          </div>
+          <div class="flex justify-between text-[14px] text-[#414844] mb-3">
+            <span>Domicilio</span> <span class="text-[#012d1d] font-semibold">Consultar con tendero</span>
+          </div>
+          <div class="flex justify-between font-bold text-[18px] mb-4">
+            <span class="text-[#191c1d]">Total (Sin envío)</span> <span id="cart-total" class="text-[#012d1d]">$0</span>
+          </div>
+          <button id="whatsapp-btn" class="w-full h-14 bg-[#fd8603] text-[#5f2f00] font-bold text-[16px] rounded-2xl flex items-center justify-center gap-2 shadow-orange active:scale-[0.98] transition-all">
+            <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2zM17.14 16.4c-.22.61-1.29 1.18-1.78 1.24-.46.06-.9.11-2.92-.68-2.43-.96-3.99-3.41-4.11-3.57-.12-.16-.96-1.28-.96-2.45 0-1.17.61-1.75.83-1.98.22-.24.47-.29.63-.29.16 0 .32 0 .46.01.15 0 .35-.06.54.41.21.51.71 1.73.77 1.86.06.13.1.28.01.45-.08.18-.13.29-.26.45-.13.15-.27.34-.39.46-.13.13-.27.28-.11.55.16.27.7 1.15 1.51 1.87.81.72 1.5 1.04 1.78 1.17.27.13.43.11.59-.07.16-.18.68-.79.86-1.06.18-.27.37-.23.63-.13.26.1 1.66 3.03 2.12.37.18.61.27.81.33.2.06.39.09.54.07.16-.02.43-.24.49-.46z"></path></svg>
+            Enviar Pedido por WhatsApp
+          </button>
+        </div>
+      </aside>
+    </div>
+
+    <!-- CLIENT LOGIC -->
+    <script define:vars={{ tiendaId: tienda.id, whatsappNumber: tienda.telefono_whatsapp, rawProducts: allProducts }}>
+      const storePrefix = `cart_${tiendaId}`;
+      let cart = JSON.parse(localStorage.getItem(storePrefix)) || [];
+      let currentPayment = 'Efectivo';
+
+      // Elements
+      const cartBadgeHeader = document.getElementById('cart-badge-header');
+      const cartBadgeNav = document.getElementById('nav-badge');
+      const productsGrid = document.getElementById('products-grid');
+      const noResults = document.getElementById('no-results');
+      const productCards = document.querySelectorAll('.product-card');
+      const searchInput = document.getElementById('search-input');
+      const categoryChips = document.querySelectorAll('.category-chip');
+      
+      const cartOverlay = document.getElementById('cart-overlay');
+      const cartPanel = document.getElementById('cart-panel');
+      const cartEmpty = document.getElementById('cart-empty');
+      const cartItemsList = document.getElementById('cart-items-list');
+      const cartFormSection = document.getElementById('cart-form-section');
+      const cartFooter = document.getElementById('cart-footer');
+      
+      const efectivoOptions = document.getElementById('efectivo-options');
+      const transferenciaOptions = document.getElementById('transferencia-options');
+      const checkoutCash = document.getElementById('checkout-cash');
+      
+      const subtotalEl = document.getElementById('cart-subtotal');
+      const totalEl = document.getElementById('cart-total');
+      const whatsappBtn = document.getElementById('whatsapp-btn');
+
+      // Initialize UI
+      function init() {
+        updateCartBadges();
+        updateProductButtons();
+        renderCartItems();
+      }
+
+      function saveCart() {
+        localStorage.setItem(storePrefix, JSON.stringify(cart));
+        updateCartBadges();
+        updateProductButtons();
+        renderCartItems();
+      }
+
+      function getEffectivePrice(p) {
+        return (p.precio_oferta && p.precio_oferta > 0) ? p.precio_oferta : p.precio;
+      }
+
+      function addToCart(productId) {
+        const product = rawProducts.find(p => p.id === productId);
+        if(!product) return;
+        
+        const existing = cart.find(i => i.id === productId);
+        if (existing) {
+          existing.qty += 1;
+        } else {
+          cart.push({
+            id: product.id,
+            nombre: product.nombre,
+            precio: getEffectivePrice(product),
+            imagen_url: product.imagen_url,
+            qty: 1
+          });
+        }
+        saveCart();
+      }
+
+      function updateQty(productId, delta) {
+        const item = cart.find(i => i.id === productId);
+        if(!item) return;
+        item.qty += delta;
+        if(item.qty <= 0) {
+          cart = cart.filter(i => i.id !== productId);
+        }
+        saveCart();
+      }
+
+      // Format currency
+      function formatMoney(amount) {
+        return '$' + amount.toLocaleString('es-CO');
+      }
+
+      // Update UI components
+      function updateCartBadges() {
+        const count = cart.reduce((acc, item) => acc + item.qty, 0);
+        [cartBadgeHeader, cartBadgeNav].forEach(badge => {
+          if (count > 0) {
+            badge.textContent = count;
+            badge.classList.remove('hidden');
+          } else {
+            badge.classList.add('hidden');
+          }
+        });
+      }
+
+      function updateProductButtons() {
+        document.querySelectorAll('.add-to-cart-btn').forEach(btn => {
+          const id = btn.getAttribute('data-id');
+          const item = cart.find(i => i.id === id);
+          
+          const card = btn.closest('.product-card') || btn.closest('.flex-shrink-0');
+          if(!card) return;
+          const qtyControl = card.querySelector('.qty-control');
+          
+          if (item && qtyControl) {
+            btn.classList.add('hidden');
+            qtyControl.classList.remove('hidden');
+            qtyControl.classList.add('flex');
+            qtyControl.querySelector('.qty-value').textContent = item.qty;
+          } else if(qtyControl) {
+            btn.classList.remove('hidden');
+            qtyControl.classList.add('hidden');
+            qtyControl.classList.remove('flex');
+          }
+        });
+      }
+
+      function renderCartItems() {
+        if (cart.length === 0) {
+          cartEmpty.classList.remove('hidden');
+          cartItemsList.classList.add('hidden');
+          cartFormSection.classList.add('hidden');
+          cartFooter.classList.add('hidden');
+          return;
+        }
+
+        cartEmpty.classList.add('hidden');
+        cartItemsList.classList.remove('hidden');
+        cartFormSection.classList.remove('hidden');
+        cartFooter.classList.remove('hidden');
+
+        let total = 0;
+        cartItemsList.innerHTML = cart.map(item => {
+          const itemTotal = item.qty * item.precio;
+          total += itemTotal;
+          return `
+            <div class="flex gap-3 bg-white p-3 rounded-xl shadow-sm border border-gray-100 items-center">
+              <div class="w-16 h-16 bg-gray-50 rounded-lg overflow-hidden flex-shrink-0">
+                ${item.imagen_url ? `<img src="${item.imagen_url}" class="w-full h-full object-cover">` : `<span class="material-symbols-outlined text-[#c1c8c2] m-auto flex h-full items-center justify-center">image</span>`}
+              </div>
+              <div class="flex-1">
+                <h4 class="text-[13px] font-bold text-[#191c1d] leading-tight line-clamp-2">${item.nombre}</h4>
+                <div class="text-[#012d1d] font-bold mt-1 text-[14px]">${formatMoney(item.precio)}</div>
+              </div>
+              <div class="flex items-center gap-2 bg-[#f8f9fa] border border-[#e7e8e9] rounded-lg h-8">
+                <button class="cart-minus w-7 h-full text-[#414844]" data-id="${item.id}">-</button>
+                <span class="text-[12px] font-bold w-4 text-center">${item.qty}</span>
+                <button class="cart-plus w-7 h-full text-[#414844]" data-id="${item.id}">+</button>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        subtotalEl.textContent = formatMoney(total);
+        totalEl.textContent = formatMoney(total);
+
+        // Bind events inside cart
+        cartItemsList.querySelectorAll('.cart-minus').forEach(b => b.addEventListener('click', () => updateQty(b.getAttribute('data-id'), -1)));
+        cartItemsList.querySelectorAll('.cart-plus').forEach(b => b.addEventListener('click', () => updateQty(b.getAttribute('data-id'), 1)));
+      }
+
+      // Sidebar toggles
+      function toggleCart(show) {
+        if (show) {
+          cartOverlay.classList.remove('hidden');
+          setTimeout(() => {
+            cartOverlay.classList.remove('opacity-0');
+            cartPanel.classList.remove('translate-x-full');
+          }, 10);
+        } else {
+          cartOverlay.classList.add('opacity-0');
+          cartPanel.classList.add('translate-x-full');
+          setTimeout(() => cartOverlay.classList.add('hidden'), 300);
+        }
+      }
+
+      document.getElementById('open-cart-btn').addEventListener('click', () => toggleCart(true));
+      document.getElementById('open-cart-nav').addEventListener('click', () => toggleCart(true));
+      document.getElementById('close-cart-btn').addEventListener('click', () => toggleCart(false));
+      cartOverlay.addEventListener('click', () => toggleCart(false));
+
+      // Delegated Add/Qty events from Main
+      document.body.addEventListener('click', e => {
+        if (e.target.closest('.add-to-cart-btn')) {
+          const btn = e.target.closest('.add-to-cart-btn');
+          addToCart(btn.getAttribute('data-id'));
+        } else if (e.target.closest('.decrease-btn')) {
+          const btn = e.target.closest('.decrease-btn');
+          updateQty(btn.getAttribute('data-id'), -1);
+        } else if (e.target.closest('.increase-btn')) {
+          const btn = e.target.closest('.increase-btn');
+          updateQty(btn.getAttribute('data-id'), 1);
+        }
+      });
+
+      // Search & Filters
+      function filterProducts() {
+        const query = searchInput.value.toLowerCase().trim();
+        const activeChip = document.querySelector('.category-chip[aria-selected="true"]');
+        const activeCategory = activeChip ? activeChip.getAttribute('data-category') : 'all';
+
+        let visibleCount = 0;
+        productCards.forEach(card => {
+          const name = card.getAttribute('data-name');
+          const cat = card.getAttribute('data-category');
+          
+          const matchSearch = name.includes(query);
+          const matchCategory = (activeCategory === 'all' || cat === activeCategory);
+          
+          if (matchSearch && matchCategory) {
+            card.style.display = 'flex';
+            visibleCount++;
+          } else {
+            card.style.display = 'none';
+          }
+        });
+
+        noResults.classList.toggle('hidden', visibleCount > 0);
+      }
+
+      searchInput.addEventListener('input', filterProducts);
+      categoryChips.forEach(chip => {
+        chip.addEventListener('click', () => {
+          categoryChips.forEach(c => {
+            c.setAttribute('aria-selected', 'false');
+            c.classList.replace('bg-[#1b4332]', 'bg-[#e7e8e9]');
+            c.classList.replace('text-[#86af99]', 'text-[#414844]');
+          });
+          chip.setAttribute('aria-selected', 'true');
+          chip.classList.replace('bg-[#e7e8e9]', 'bg-[#1b4332]');
+          chip.classList.replace('text-[#414844]', 'text-[#86af99]');
+          filterProducts();
+        });
+      });
+
+      // Payments
+      document.querySelectorAll('.payment-opt').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.payment-opt').forEach(b => {
+            b.classList.remove('border-2', 'border-[#012d1d]', 'bg-[#f0f7f3]', 'text-[#012d1d]');
+            b.classList.add('border', 'border-[#c1c8c2]', 'bg-white', 'text-[#414844]');
+          });
+          btn.classList.add('border-2', 'border-[#012d1d]', 'bg-[#f0f7f3]', 'text-[#012d1d]');
+          btn.classList.remove('border', 'border-[#c1c8c2]', 'bg-white', 'text-[#414844]');
+          currentPayment = btn.getAttribute('data-method');
+
+          if (currentPayment === 'Efectivo') {
+            efectivoOptions.classList.remove('hidden');
+            efectivoOptions.classList.add('flex');
+            transferenciaOptions.classList.add('hidden');
+          } else {
+            efectivoOptions.classList.add('hidden');
+            efectivoOptions.classList.remove('flex');
+            transferenciaOptions.classList.remove('hidden');
+          }
+        });
+      });
+
+      // Checkout to WhatsApp & DB
+      whatsappBtn.addEventListener('click', async () => {
+        const name = document.getElementById('checkout-name').value.trim();
+        const address = document.getElementById('checkout-address').value.trim();
+        const apt = document.getElementById('checkout-apt').value.trim();
+
+        if (!name || !address) {
+          alert("Por favor, completa tu Nombre y Dirección para el envío.");
+          return;
+        }
+
+        whatsappBtn.disabled = true;
+        whatsappBtn.innerHTML = 'Procesando...';
+
+        let total = cart.reduce((acc, item) => acc + (item.qty * item.precio), 0);
+        let direccionCompleta = `${address} ${apt ? `(${apt})` : ''}`.trim();
+        
+        let paymentDesc = currentPayment;
+        if (currentPayment === 'Efectivo' && checkoutCash.value) {
+            paymentDesc += ` (Paga con: ${formatMoney(Number(checkoutCash.value))})`;
+        }
+        
+        // 1. Guardar en Base de Datos
+        let pedidoId = '';
+        try {
+          const payload = {
+            tienda_id: tiendaId,
+            nombre_cliente: name,
+            direccion: direccionCompleta,
+            metodo_pago: paymentDesc,
+            total: total,
+            items: cart
+          };
+          
+          const res = await fetch('/api/crear-pedido', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          const data = await res.json();
+          if(data.success) {
+            pedidoId = data.pedido.id;
+          } else {
+            throw new Error(data.error);
+          }
+        } catch(e) {
+          console.error(e);
+          alert('Hubo un problema registrando tu pedido, pero intentaremos enviarlo por WhatsApp de todos modos.');
+        }
+
+        // 2. Preparar mensaje WhatsApp
+        let text = `*¡Hola! Quiero hacer un pedido:*%0A%0A`;
+        if(pedidoId) {
+          text += `*ID Pedido:* #${pedidoId.slice(0,6)}%0A`;
+        }
+        text += `*Cliente:* ${name}%0A`;
+        text += `*Dirección:* ${direccionCompleta}%0A`;
+        text += `*Método de Pago:* ${paymentDesc}%0A`;
+        
+        text += `%0A*Mi Pedido:*%0A`;
+        cart.forEach(item => {
+          text += `▪ ${item.qty}x ${item.nombre} - ${formatMoney(item.qty * item.precio)}%0A`;
+        });
+        text += `%0A*TOTAL: ${formatMoney(total)}*%0A`;
+        
+        if (pedidoId) {
+          // Link a rastreo (la URL actual cambia [slug] a [slug]/rastreo/[id])
+          const rastreoUrl = window.location.origin + window.location.pathname + '/rastreo/' + pedidoId;
+          text += `%0A*Sigue tu pedido aquí:* ${rastreoUrl}%0A`;
+        }
+        
+        const rawPhone = whatsappNumber.replace(/\D/g, ''); 
+        const url = `https://api.whatsapp.com/send/?phone=${rawPhone}&text=${text}`;
+        
+        // Abrir WhatsApp en nueva pestaña
+        window.open(url, '_blank');
+        
+        // Limpiar carrito
+        cart = [];
+        saveCart();
+        
+        // Redirigir la pestaña actual a la vista de rastreo
+        if (pedidoId) {
+          window.location.href = window.location.pathname + '/rastreo/' + pedidoId;
+        } else {
+          toggleCart(false);
+          whatsappBtn.disabled = false;
+          whatsappBtn.innerHTML = 'Enviar Pedido por WhatsApp';
+        }
+      });
+
+      init();
+    </script>
+  </body>
+</html>

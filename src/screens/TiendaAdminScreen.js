@@ -90,7 +90,8 @@ export default function TiendaAdminScreen({ navigation }) {
         <View style={styles.infoBox}>
           <MaterialCommunityIcons name="store" size={48} color={theme.colors.primary} />
           <Text style={styles.infoTitle}>Tu tienda está activa</Text>
-          <Text style={styles.infoSubtitle}>Los cambios se aplican de inmediato en la vista del cliente</Text>
+          <Text style={styles.infoSubtitle}>Código para Domiciliarios: <Text style={{fontWeight:'bold'}}>{tienda?.slug}</Text></Text>
+          <Text style={[styles.infoSubtitle, {fontSize: 11, marginTop: 8}]}>Comparte este código para que tus domiciliarios se vinculen a tu tienda al registrarse.</Text>
         </View>
 
         <View style={styles.card}>
