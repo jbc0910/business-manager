@@ -25,6 +25,7 @@ import {
 import { listCategorias } from '../services/categorias';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { exportarProductosExcel, leerExcelDeProductos } from '../services/importExport';
+import { confirmAction } from '../utils/confirm';
 
 export default function ProductosAdminScreen({ navigation }) {
   const { tienda } = useTienda();
@@ -103,29 +104,23 @@ export default function ProductosAdminScreen({ navigation }) {
   };
 
   const handleDelete = (producto) => {
-    Alert.alert(
-      'Eliminar producto',
-      `¿Seguro que quieres eliminar "${producto.nombre}"?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Eliminar',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteProducto(producto);
-              setProductos((prev) => prev.filter((p) => p.id !== producto.id));
-            } catch (err) {
-              console.error('[Delete] Error eliminando producto:', JSON.stringify(err));
-              Alert.alert(
-                'Error al eliminar',
-                err.message || 'No se pudo eliminar el producto. Puede que falte un permiso en la base de datos.'
-              );
-            }
-          },
-        },
-      ]
-    );
+    confirmAction({
+      title: 'Eliminar producto',
+      message: `¿Seguro que quieres eliminar "${producto.nombre}"?`,
+      confirmText: 'Eliminar',
+      onConfirm: async () => {
+        try {
+          await deleteProducto(producto);
+          setProductos((prev) => prev.filter((p) => p.id !== producto.id));
+        } catch (err) {
+          console.error('[Delete] Error eliminando producto:', JSON.stringify(err));
+          Alert.alert(
+            'Error al eliminar',
+            err.message || 'No se pudo eliminar el producto.'
+          );
+        }
+      },
+    });
   };
 
   const handleExport = async () => {

@@ -32,9 +32,14 @@ export default function PedidosAdminScreen() {
       const { data, error } = await supabase
         .from('pedidos')
         .select('*')
+        .eq('tienda_id', tienda.id)
         .order('created_at', { ascending: false });
         
-      if (error) throw error;
+      if (error) {
+        console.error('[PedidosAdmin] Error cargando pedidos:', error);
+        throw error;
+      }
+      console.log(`[PedidosAdmin] ${data?.length || 0} pedidos cargados para la tienda ${tienda.id}`);
       setPedidos(data || []);
     } catch (err) {
       console.error('Error cargando pedidos:', err);

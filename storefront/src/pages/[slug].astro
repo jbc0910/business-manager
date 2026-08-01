@@ -18,30 +18,57 @@ if (tiendaError || !tienda) {
 // Fetch products
 const { data: productos, error: productosError } = await supabase
   .from('productos')
-  .select('id, tienda_id, nombre, precio, stock, imagen_url, categoria, precio_oferta, categoria_id')
+  .select('id, tienda_id, nombre, precio, stock, imagen_url, categoria, precio_oferta, categoria_id, ref_categoria:categorias(id, nombre, icono)')
   .eq('tienda_id', tienda.id);
 
 if (productosError) {
   console.error("Error fetching products:", productosError);
 }
 
-const allProducts = productos || [];
-// Obtener categorías únicas dinámicamente, y añadir un ícono por defecto
-const rawCategories = Array.from(new Set(allProducts.map(p => p.categoria).filter(Boolean)));
-const defaultIcons: Record<string, string> = {
-  'lácteos': 'egg_alt',
-  'lacteos': 'egg_alt',
-  'bebidas': 'local_cafe',
-  'snacks': 'cookie',
-  'frutas': 'nutrition',
-  'limpieza': 'cleaning_services',
-  'panadería': 'bakery_dining',
-  'panaderia': 'bakery_dining'
+const allProducts = (productos || []).map(p => {
+  const refCat = Array.isArray(p.ref_categoria) ? p.ref_categoria[0] : p.ref_categoria;
+  return {
+    ...p,
+    categoria: (refCat as any)?.nombre || p.categoria || 'General',
+    categoria_icono_raw: (refCat as any)?.icono || null
+  };
+});
+
+// Mapeo de iconos MaterialCommunityIcons (React Native) → Material Symbols (Web)
+const iconTranslation: Record<string, string> = {
+  'tag-outline': 'sell',
+  'bottle-wine-outline': 'water_bottle',
+  'cup-water': 'local_cafe',
+  'food-apple-outline': 'nutrition',
+  'food-croissant': 'cookie',
+  'spray-bottle': 'cleaning_services',
+  'bakery-dining': 'bakery_dining',
+  'egg-outline': 'egg_alt',
+  'cart-outline': 'shopping_cart',
+  'basket-outline': 'shopping_basket',
+  'beer-outline': 'sports_bar',
+  'fish': 'set_meal',
+  'pill': 'medication',
+  'tshirt-crew-outline': 'checkroom',
+  'ice-cream': 'icecream',
+  'candy-outline': 'cake',
+  'grain': 'grass',
+  'paw': 'pets',
+  'baby-carriage': 'child_friendly',
 };
 
-const categories = rawCategories.map(cat => ({
-  name: cat,
-  icon: defaultIcons[cat.toLowerCase()] || 'category'
+// Obtener categorías únicas con su icono real de la BD
+const categoryMap = new Map<string, string>();
+allProducts.forEach(p => {
+  if (p.categoria && !categoryMap.has(p.categoria)) {
+    const rawIcon = p.categoria_icono_raw || '';
+    categoryMap.set(p.categoria, iconTranslation[rawIcon] || 'category');
+  }
+});
+
+const categories = Array.from(categoryMap.entries()).map(([name, icon]) => ({
+  name,
+  icon
 }));
 
 // Separar ofertas si tienen precio_oferta válido y mayor a 0
@@ -662,8 +689,8 @@ const promoProducts = allProducts.filter(p => p.precio_oferta && p.precio_oferta
             throw new Error(data.error);
           }
         } catch(e) {
-          console.error(e);
-          alert('Hubo un problema registrando tu pedido, pero intentaremos enviarlo por WhatsApp de todos modos.');
+          console.error('[Checkout Error]:', e);
+          alert(`Hubo un problema registrando tu pedido (${e.message || 'Error de conexión'}), pero intentaremos enviarlo por WhatsApp de todos modos.`);
         }
 
         // 2. Preparar mensaje WhatsApp

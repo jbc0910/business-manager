@@ -100,7 +100,7 @@ export async function createProducto({ tiendaId, nombre, precio, stock, categori
       precio_oferta: precio_oferta || null,
       imagen_url,
     })
-    .select()
+    .select('*, categoria:categorias(id, nombre, icono)')
     .single();
 
   if (error) throw error;
@@ -124,7 +124,7 @@ export async function updateProducto(producto, { nombre, precio, stock, categori
     .from('productos')
     .update(updates)
     .eq('id', producto.id)
-    .select()
+    .select('*, categoria:categorias(id, nombre, icono)')
     .single();
 
   if (error) throw error;

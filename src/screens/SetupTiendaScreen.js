@@ -28,7 +28,7 @@ const sanitizeSlug = (text) =>
 const SLUG_CHECK_DEBOUNCE_MS = 500;
 
 export default function SetupTiendaScreen() {
-  const { user } = useAuth();
+  const { user, profile, setProfile } = useAuth();
   const { setTienda } = useTienda();
 
   const [nombreTienda, setNombreTienda] = useState('');
@@ -118,6 +118,21 @@ export default function SetupTiendaScreen() {
       return;
     }
 
+    // Actualizar el perfil en la base de datos con el id de la tienda creada
+    const { error: profileError } = await supabase
+      .from('perfiles')
+      .update({ tienda_id: data.id })
+      .eq('id', user.id);
+
+    if (profileError) {
+      console.error('[SetupTienda] Error vinculando tienda al perfil:', profileError.message);
+    }
+
+    // Actualizar el estado del perfil en AuthContext
+    if (setProfile) {
+      setProfile((prev) => (prev ? { ...prev, tienda_id: data.id } : { id: user.id, rol: 'Administrador', tienda_id: data.id }));
+    }
+
     try {
       await seedCategoriasDefecto(data.id);
     } catch (seedErr) {
@@ -128,7 +143,7 @@ export default function SetupTiendaScreen() {
     // La navegación al Dashboard ocurre automáticamente en App.js al
     // detectar que `tienda` dejó de ser null.
     setLoading(false);
-  }, [nombreTienda, slug, telefonoWhatsapp, user, setTienda]);
+  }, [nombreTienda, slug, telefonoWhatsapp, user, setProfile, setTienda]);
 
   const slugHint = {
     idle: '',

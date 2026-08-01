@@ -16,6 +16,7 @@ import { useTienda } from '../context/TiendaContext';
 import { theme } from '../styles/theme';
 import { listCategorias, createCategoria, updateCategoria, deleteCategoria } from '../services/categorias';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { confirmAction } from '../utils/confirm';
 
 // Lista de iconos disponibles para seleccionar
 const ICONOS_DISPONIBLES = [
@@ -107,26 +108,20 @@ export default function CategoriasAdminScreen() {
   };
 
   const handleDelete = (cat) => {
-    Alert.alert(
-      'Eliminar Categoría',
-      `¿Seguro que quieres eliminar "${cat.nombre}"?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Eliminar',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteCategoria(cat.id);
-              setCategorias(prev => prev.filter(c => c.id !== cat.id));
-            } catch (err) {
-              console.error('[Categorias] Error eliminando:', err);
-              Alert.alert('Error', 'No se pudo eliminar la categoría.');
-            }
-          }
+    confirmAction({
+      title: 'Eliminar Categoría',
+      message: `¿Seguro que quieres eliminar "${cat.nombre}"?`,
+      confirmText: 'Eliminar',
+      onConfirm: async () => {
+        try {
+          await deleteCategoria(cat.id);
+          setCategorias(prev => prev.filter(c => c.id !== cat.id));
+        } catch (err) {
+          console.error('[Categorias] Error eliminando:', err);
+          Alert.alert('Error', 'No se pudo eliminar la categoría.');
         }
-      ]
-    );
+      }
+    });
   };
 
   if (loading) {

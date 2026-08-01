@@ -1,17 +1,24 @@
 import { createClient } from '@supabase/supabase-js';
 import type { APIRoute } from 'astro';
 
-// Initialize Supabase with service role key to bypass RLS for inserting orders
 const supabaseUrl = import.meta.env.SUPABASE_URL;
-const supabaseServiceKey = import.meta.env.SUPABASE_SERVICE_ROLE_KEY || import.meta.env.SUPABASE_ANON_KEY;
-const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+const supabaseKey = import.meta.env.SUPABASE_SERVICE_ROLE_KEY || import.meta.env.SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error('[crear-pedido] Missing SUPABASE_URL or key in env');
+}
+
+const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
 
 export const POST: APIRoute = async ({ request }) => {
   try {
     const body = await request.json();
     
     if (!body.tienda_id || !body.nombre_cliente || !body.direccion || !body.items || body.items.length === 0) {
-      return new Response(JSON.stringify({ error: 'Datos incompletos' }), { status: 400 });
+      return new Response(JSON.stringify({ error: 'Datos incompletos' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
 
     // 1. Fetch real product data to validate prices and stock
@@ -22,22 +29,32 @@ export const POST: APIRoute = async ({ request }) => {
       .in('id', productIds);
 
     if (prodError || !realProducts) {
-      return new Response(JSON.stringify({ error: 'Error verificando productos' }), { status: 500 });
+      console.error('[crear-pedido] Error fetching products:', prodError);
+      return new Response(JSON.stringify({ error: 'Error verificando productos' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
 
     let calculatedTotal = 0;
-    const validatedItems = [];
+    const validatedItems: any[] = [];
 
     // 2. Validate each item
     for (const item of body.items) {
       const realProduct = realProducts.find(p => p.id === item.id);
       
       if (!realProduct) {
-        return new Response(JSON.stringify({ error: `Producto no encontrado: ${item.nombre}` }), { status: 400 });
+        return new Response(JSON.stringify({ error: `Producto no encontrado: ${item.nombre}` }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        });
       }
       
       if (realProduct.stock <= 0) {
-        return new Response(JSON.stringify({ error: `El producto '${realProduct.nombre}' está agotado.` }), { status: 400 });
+        return new Response(JSON.stringify({ error: `El producto '${realProduct.nombre}' está agotado.` }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        });
       }
 
       // Use the effective price from DB
@@ -56,10 +73,13 @@ export const POST: APIRoute = async ({ request }) => {
       });
     }
 
-    // 3. Insert the order securely
-    const { data, error } = await supabaseAdmin
+    // 3. Insert the order using a pre-generated UUID to avoid RLS SELECT restrictions
+    const pedidoId = crypto.randomUUID();
+
+    const { error } = await supabaseAdmin
       .from('pedidos')
       .insert({
+        id: pedidoId,
         tienda_id: body.tienda_id,
         nombre_cliente: body.nombre_cliente,
         direccion: body.direccion,
@@ -67,19 +87,30 @@ export const POST: APIRoute = async ({ request }) => {
         total: calculatedTotal,
         items: validatedItems,
         estado: 'En preparación'
-      })
-      .select()
-      .single();
+      });
 
     if (error) {
-      console.error('Error insertando pedido:', error);
-      return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+      console.error('[crear-pedido] Error insertando pedido:', JSON.stringify(error));
+      return new Response(JSON.stringify({ 
+        error: error.message,
+        hint: error.hint || null,
+        code: error.code || null,
+      }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
 
-    return new Response(JSON.stringify({ success: true, pedido: data }), { status: 200 });
+    return new Response(JSON.stringify({ success: true, pedido: { id: pedidoId } }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
 
   } catch (e: any) {
-    console.error('Error procesando pedido:', e);
-    return new Response(JSON.stringify({ error: e.message }), { status: 500 });
+    console.error('[crear-pedido] Unhandled error:', e);
+    return new Response(JSON.stringify({ error: e.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 };

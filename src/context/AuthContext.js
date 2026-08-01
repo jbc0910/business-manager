@@ -9,21 +9,34 @@ export const AuthProvider = ({ children }) => {
   const [profile, setProfile] = useState(null);
   const [isGlobalLoading, setIsGlobalLoading] = useState(true);
 
+  const fetchProfile = async (userId) => {
+    try {
+      const { data, error } = await supabase
+        .from('perfiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (error) {
+        console.error('[AuthContext] Error fetching profile:', error);
+        return null;
+      }
+      return data;
+    } catch (e) {
+      console.error('[AuthContext] Exception fetching profile:', e);
+      return null;
+    }
+  };
+
   useEffect(() => {
     const initAuth = async () => {
       try {
         const { data, error } = await supabase.auth.getSession();
         if (error) throw error;
         
-        if (data.session) {
+        if (data.session?.user) {
           setUser(data.session.user);
-          const { data: userProfile, error: profileError } = await supabase
-            .from('perfiles')
-            .select('*')
-            .eq('id', data.session.user.id)
-            .maybeSingle();
-            
-          if (profileError) console.error('[AuthContext] Error fetching profile:', profileError);
+          const userProfile = await fetchProfile(data.session.user.id);
           setProfile(userProfile);
           retryPendingImageDeletions();
         }
@@ -38,36 +51,18 @@ export const AuthProvider = ({ children }) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       try {
         if (session?.user) {
-          let userProfile = null;
+          setUser(session.user);
+          let userProfile = await fetchProfile(session.user.id);
+
+          // Si acaba de registrarse, reintentar la obtención del perfil
           let retries = 0;
-          let delay = 1000;
-          
-          while (retries < 5 && !userProfile) {
-            const { data, error } = await supabase
-              .from('perfiles')
-              .select('*')
-              .eq('id', session.user.id)
-              .maybeSingle();
-              
-            if (error) {
-              console.error('[AuthContext] Error fetching profile on state change:', error);
-              break; // If real error, don't keep polling
-            }
-            
-            if (data) {
-              userProfile = data;
-              break;
-            }
-            
-            if (event !== 'SIGNED_IN') break; // Only poll on fresh sign in
-            
-            await new Promise(r => setTimeout(r, delay));
+          while (!userProfile && retries < 4) {
+            await new Promise(r => setTimeout(r, 800));
+            userProfile = await fetchProfile(session.user.id);
             retries++;
-            delay *= 1.5; // Exponential backoff
           }
 
-          setProfile(userProfile || null);
-          setUser(session.user);
+          setProfile(userProfile);
           
           if (event === 'SIGNED_IN') {
             retryPendingImageDeletions();

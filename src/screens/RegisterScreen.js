@@ -16,9 +16,12 @@ import { Button } from '../components/Button';
 import * as WebBrowser from 'expo-web-browser';
 import { makeRedirectUri } from 'expo-auth-session';
 
+import { useAuth } from '../context/AuthContext';
+
 WebBrowser.maybeCompleteAuthSession();
 
 export default function RegisterScreen({ navigation }) {
+  const { setProfile } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [nombre, setNombre] = useState('');
@@ -51,27 +54,6 @@ export default function RegisterScreen({ navigation }) {
 
     setLoading(true);
     try {
-      // 1. Crear usuario en Supabase Auth
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email: email.trim().toLowerCase(),
-        password,
-      });
-
-      if (signUpError) {
-        setGlobalError(
-          signUpError.message === 'User already registered'
-            ? 'Este email ya está registrado'
-            : signUpError.message
-        );
-        return;
-      }
-
-      const newUser = data?.user;
-      if (!newUser) {
-        setGlobalError('Error al crear el usuario. Intenta de nuevo.');
-        return;
-      }
-
       let assignedTiendaId = null;
       if (rol === 'Domiciliario') {
         const { data: storeData, error: storeError } = await supabase
@@ -82,21 +64,61 @@ export default function RegisterScreen({ navigation }) {
           
         if (storeError || !storeData) {
           setGlobalError('No se encontró ninguna tienda con ese código.');
+          setLoading(false);
           return;
         }
         assignedTiendaId = storeData.id;
       }
 
-      // Upsert profile
-      const { error: profileError } = await supabase.from('perfiles').upsert({
+      // 1. Crear usuario en Supabase Auth pasando metadata para que el trigger de BD la cree si RLS bloquea en el cliente
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email: email.trim().toLowerCase(),
+        password,
+        options: {
+          data: {
+            nombre: nombre.trim(),
+            rol: rol,
+            tienda_slug: tiendaSlug ? tiendaSlug.trim().toLowerCase() : null,
+            tienda_id: assignedTiendaId
+          }
+        }
+      });
+
+      if (signUpError) {
+        setGlobalError(
+          signUpError.message === 'User already registered'
+            ? 'Este email ya está registrado'
+            : signUpError.message
+        );
+        setLoading(false);
+        return;
+      }
+
+      const newUser = data?.user;
+      if (!newUser) {
+        setGlobalError('Error al crear el usuario. Intenta de nuevo.');
+        setLoading(false);
+        return;
+      }
+
+      // 2. Inserción directa en perfiles desde el cliente
+      const newProfile = {
         id: newUser.id,
         nombre: nombre.trim(),
         rol: rol,
         tienda_id: assignedTiendaId
-      });
+      };
+
+      const { error: profileError } = await supabase.from('perfiles').upsert(newProfile);
 
       if (profileError) {
-        console.error('[RegisterScreen] Error guardando perfil:', profileError);
+        console.error('[RegisterScreen] Error guardando perfil desde cliente:', profileError.message);
+      } else {
+        console.log('[RegisterScreen] Perfil guardado con éxito desde cliente:', newProfile);
+      }
+
+      if (setProfile) {
+        setProfile(newProfile);
       }
 
       if (!data?.session) {

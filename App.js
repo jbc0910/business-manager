@@ -31,9 +31,11 @@ const Stack = createNativeStackNavigator();
 
 const RootNavigator = () => {
   const { user, profile, isGlobalLoading } = useAuth();
-  const { tienda } = useTienda();
+  const { tienda, isLoadingTienda } = useTienda();
 
-  if (isGlobalLoading) {
+  // Esperar únicamente si se está cargando la autenticación global,
+  // o si el usuario no es Domiciliario y la tienda aún está cargando datos.
+  if (isGlobalLoading || (user && profile?.rol !== 'Domiciliario' && isLoadingTienda)) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color={theme.colors.primary} />
