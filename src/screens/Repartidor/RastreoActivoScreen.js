@@ -10,19 +10,38 @@ export default function RastreoActivoScreen({ route, navigation }) {
   const [estado, setEstado] = useState(pedido.estado);
   const [loading, setLoading] = useState(false);
 
-  // SIMULACIÓN DE MAPA Y UBICACIÓN
-  // En un entorno real aquí usaríamos <MapView> de react-native-maps
-  // y Location.watchPositionAsync() de expo-location
+  useEffect(() => {
+    const fetchLatestPedido = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('pedidos')
+          .select('estado, lat_repartidor, long_repartidor')
+          .eq('id', pedido.id)
+          .single();
+        if (!error && data) {
+          setEstado(data.estado);
+        }
+      } catch (err) {
+        console.error('[RastreoActivo] Error consultando estado reciente:', err);
+      }
+    };
+    fetchLatestPedido();
+  }, [pedido.id]);
 
   const actualizarEstado = async (nuevoEstado) => {
     setLoading(true);
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('pedidos')
         .update({ estado: nuevoEstado })
-        .eq('id', pedido.id);
+        .eq('id', pedido.id)
+        .select();
         
-      if (error) throw error;
+      if (error) {
+        console.error('[RastreoActivo] Error RLS al actualizar estado:', JSON.stringify(error));
+        throw error;
+      }
+      console.log('[RastreoActivo] Estado actualizado a:', nuevoEstado, '| Respuesta DB:', data);
       setEstado(nuevoEstado);
       
       if (nuevoEstado === 'Entregado') {
@@ -31,8 +50,8 @@ export default function RastreoActivoScreen({ route, navigation }) {
         ]);
       }
     } catch (err) {
-      console.error('Error actualizando estado:', err);
-      Alert.alert('Error', 'No se pudo actualizar el estado.');
+      console.error('[RastreoActivo] Error actualizando estado:', err);
+      Alert.alert('Error', `No se pudo actualizar el estado: ${err.message || JSON.stringify(err)}`);
     } finally {
       setLoading(false);
     }

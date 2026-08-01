@@ -15,9 +15,13 @@ export default function PedidosAdminScreen() {
     fetchPedidos();
     
     // Suscripción a cambios en tiempo real
-    const channel = supabase.channel('pedidos-admin')
+    const channel = supabase.channel(`pedidos-admin-${tienda?.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos', filter: `tienda_id=eq.${tienda?.id}` }, payload => {
-        fetchPedidos();
+        if (payload.eventType === 'UPDATE') {
+          setPedidos(prev => prev.map(p => p.id === payload.new.id ? { ...p, ...payload.new } : p));
+        } else {
+          fetchPedidos();
+        }
       })
       .subscribe();
 
