@@ -6,7 +6,7 @@ const { slug, id_pedido } = Astro.params;
 
 const { data: tienda } = await supabase
   .from('tiendas')
-  .select('id, nombre_tienda')
+  .select('id, nombre_tienda, lat_negocio, lng_negocio, es_oculto')
   .eq('slug', slug)
   .single();
 
@@ -145,6 +145,8 @@ if (!pedido) return new Response('Pedido no encontrado', { status: 404 });
     createdAt:     pedido.created_at,
     initialLat:    pedido.lat_repartidor,
     initialLng:    pedido.long_repartidor,
+    storeLat:      tienda.lat_negocio,
+    storeLng:      tienda.lng_negocio,
     supbaseUrl:    import.meta.env.SUPABASE_URL,
     supabaseAnonKey: import.meta.env.SUPABASE_ANON_KEY
   }}>
@@ -154,11 +156,15 @@ if (!pedido) return new Response('Pedido no encontrado', { status: 404 });
     let map = null;
     let driverMarker = null;
 
-    // ── Mapa Leaflet ────────────────────────────────────────
+    // Prioridad: 1) GPS repartidor, 2) coordenadas del negocio, 3) Bogotá por defecto
+    const fallbackLat = storeLat || 4.6097102;
+    const fallbackLng = storeLng || -74.081749;
+
+    // ── Mapa Leaflet ──────────────────────────────────────
     function initMap(lat, lng) {
       if (map) return;
-      const tLat = lat || 4.6097102;
-      const tLng = lng || -74.081749;
+      const tLat = lat || fallbackLat;
+      const tLng = lng || fallbackLng;
       map = L.map('leaflet-map').setView([tLat, tLng], 15);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap'

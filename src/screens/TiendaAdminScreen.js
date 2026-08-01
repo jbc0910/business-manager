@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert, Modal, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useForm, Controller } from 'react-hook-form';
@@ -18,16 +18,42 @@ export default function TiendaAdminScreen({ navigation }) {
       nombre: tienda?.nombre_tienda || '',
       whatsapp: tienda?.telefono_whatsapp || '',
       horario: tienda?.horario_atencion || '',
+      direccion: tienda?.direccion_negocio || '',
     }
   });
+
+  const [esOculto, setEsOculto] = useState(tienda?.es_oculto || false);
+  const [geocodingAddress, setGeocodingAddress] = useState(false);
 
   useEffect(() => {
     reset({
       nombre: tienda?.nombre_tienda || '',
       whatsapp: tienda?.telefono_whatsapp || '',
       horario: tienda?.horario_atencion || '',
+      direccion: tienda?.direccion_negocio || '',
     });
+    setEsOculto(tienda?.es_oculto || false);
   }, [tienda, reset]);
+
+  // Geocodifica la dirección con Nominatim (OpenStreetMap) — gratis, sin API key
+  const geocodeAddress = async (address) => {
+    if (!address?.trim()) return { lat: null, lng: null };
+    try {
+      setGeocodingAddress(true);
+      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`;
+      const resp = await fetch(url, { headers: { 'User-Agent': 'business-manager-app' } });
+      const results = await resp.json();
+      if (results.length > 0) {
+        return { lat: parseFloat(results[0].lat), lng: parseFloat(results[0].lon) };
+      }
+      return { lat: null, lng: null };
+    } catch (e) {
+      console.error('[Geocode]', e);
+      return { lat: null, lng: null };
+    } finally {
+      setGeocodingAddress(false);
+    }
+  };
 
   const [metodosPago, setMetodosPago] = useState(tienda?.metodos_pago || []);
   const [saving, setSaving] = useState(false);
@@ -46,18 +72,54 @@ export default function TiendaAdminScreen({ navigation }) {
 
     setSaving(true);
     try {
+      // Geocodificar dirección si cambió
+      let latNegocio = tienda?.lat_negocio || null;
+      let lngNegocio = tienda?.lng_negocio || null;
+
+      const newAddress = data.direccion?.trim();
+      if (newAddress && newAddress !== tienda?.direccion_negocio) {
+        const coords = await geocodeAddress(newAddress);
+        if (coords.lat) {
+          latNegocio = coords.lat;
+          lngNegocio = coords.lng;
+        } else {
+          Alert.alert(
+            'Dirección no encontrada',
+            'No se pudo obtener la ubicación de esa dirección. Guarda de todas formas o revisa la dirección.',
+            [
+              { text: 'Cancelar', style: 'cancel', onPress: () => setSaving(false) },
+              { text: 'Guardar igual', onPress: async () => {
+                await doSave(data, null, null);
+              }}
+            ]
+          );
+          return;
+        }
+      }
+
+      await doSave(data, latNegocio, lngNegocio);
+    } catch (err) {
+      console.error('[TiendaConfig] Error:', err);
+      Alert.alert('Error', 'No se pudo guardar la configuración.');
+      setSaving(false);
+    }
+  };
+
+  const doSave = async (data, lat, lng) => {
+    try {
       const updates = {
         nombre_tienda: data.nombre.trim(),
         telefono_whatsapp: data.whatsapp.trim(),
         horario_atencion: data.horario.trim(),
         metodos_pago: metodosPago,
+        direccion_negocio: data.direccion?.trim() || null,
+        lat_negocio: lat,
+        lng_negocio: lng,
+        es_oculto: esOculto,
       };
       const updatedTienda = await updateTienda(tienda.id, updates);
       setTienda(updatedTienda);
       Alert.alert('Éxito', 'Configuración guardada correctamente.');
-    } catch (err) {
-      console.error('[TiendaConfig] Error:', err);
-      Alert.alert('Error', 'No se pudo guardar la configuración.');
     } finally {
       setSaving(false);
     }
@@ -140,6 +202,51 @@ export default function TiendaAdminScreen({ navigation }) {
               />
             )}
           />
+        </View>
+
+        {/* Dirección del negocio */}
+        <View style={styles.card}>
+          <Text style={styles.label}>Dirección del Negocio</Text>
+          <Text style={styles.helpText}>Se usará como punto de partida del mapa de rastreo</Text>
+          <Controller
+            control={control}
+            name="direccion"
+            render={({ field: { onChange, value } }) => (
+              <TextInput
+                style={styles.input}
+                value={value}
+                onChangeText={onChange}
+                placeholder="Ej. Carrera 15 #93-47, Bogotá"
+              />
+            )}
+          />
+          {geocodingAddress && (
+            <View style={styles.geocodingRow}>
+              <ActivityIndicator size="small" color={theme.colors.primary} />
+              <Text style={styles.geocodingText}>Buscando ubicación...</Text>
+            </View>
+          )}
+          {tienda?.lat_negocio && (
+            <Text style={styles.coordsText}>
+              ✓ Ubicación guardada ({tienda.lat_negocio?.toFixed(4)}, {tienda.lng_negocio?.toFixed(4)})
+            </Text>
+          )}
+        </View>
+
+        {/* Negocio Oculto */}
+        <View style={styles.card}>
+          <View style={styles.switchRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.label}>Negocio Oculto</Text>
+              <Text style={styles.helpText}>El negocio no muestra su dirección física al cliente (dark kitchen, oficina virtual, etc.)</Text>
+            </View>
+            <Switch
+              value={esOculto}
+              onValueChange={setEsOculto}
+              trackColor={{ false: '#e7e8e9', true: '#a7f3d0' }}
+              thumbColor={esOculto ? theme.colors.primary : '#bdbdbd'}
+            />
+          </View>
         </View>
 
         <View style={styles.card}>
@@ -264,7 +371,12 @@ const styles = StyleSheet.create({
   infoTitle: { fontSize: 18, fontWeight: '700', color: theme.colors.primary, marginTop: 8 },
   infoSubtitle: { fontSize: 13, color: '#1b4332', marginTop: 4, textAlign: 'center' },
   card: { backgroundColor: theme.colors.surface, padding: 16, borderRadius: 16, elevation: 1 },
-  label: { fontSize: 12, fontWeight: '700', color: theme.colors.onSurfaceVariant, textTransform: 'uppercase', marginBottom: 8 },
+  label: { fontSize: 12, fontWeight: '700', color: theme.colors.onSurfaceVariant, textTransform: 'uppercase', marginBottom: 4 },
+  helpText: { fontSize: 12, color: theme.colors.onSurfaceVariant, marginBottom: 8, lineHeight: 16 },
+  geocodingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
+  geocodingText: { fontSize: 12, color: theme.colors.primary },
+  coordsText: { fontSize: 11, color: '#10b981', marginTop: 6 },
+  switchRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   input: {
     height: 48,
     borderWidth: 1,
