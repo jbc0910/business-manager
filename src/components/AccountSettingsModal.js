@@ -22,8 +22,9 @@ import { useTienda } from '../context/TiendaContext';
 //  TiendaAdminScreen, justo sobre el botón de cerrar sesión.
 // ─────────────────────────────────────────────────────────
 export default function AccountSettingsModal() {
-  const { user, signOut } = useAuth();
+  const { user, profile, signOut } = useAuth();
   const { tienda, setTienda } = useTienda();
+  const isDomiciliario = profile?.rol === 'Domiciliario';
 
   const [modalVisible, setModalVisible] = useState(false);
   // 'menu' | 'businessName' | 'password' | 'deleteAccount'
@@ -58,6 +59,10 @@ export default function AccountSettingsModal() {
 
   // ── Cambiar nombre del negocio ──────────────────────────
   const handleSaveBusinessName = async () => {
+    if (isDomiciliario) {
+      Alert.alert('Acceso Denegado', 'Los domiciliarios no pueden cambiar datos de la tienda.');
+      return;
+    }
     const trimmed = newBusinessName.trim();
     if (!trimmed) {
       Alert.alert('Error', 'El nombre no puede estar vacío.');
@@ -109,13 +114,6 @@ export default function AccountSettingsModal() {
   };
 
   // ── Eliminar cuenta ─────────────────────────────────────
-  // NOTA SUPABASE: Para que esto funcione debes habilitar la función
-  // de eliminación de usuarios en Supabase:
-  //   1. Ve a Authentication → Providers → Email y activa "Allow users to delete their own accounts"
-  //      (disponible en el plan Pro) o usa una Edge Function + service_role key.
-  //   2. Alternativa gratuita: crea una Edge Function que llame a
-  //      supabaseAdmin.auth.admin.deleteUser(userId) con la service_role key.
-  //      Luego llama esa función aquí en lugar de supabase.auth.admin.deleteUser.
   const handleDeleteAccount = async () => {
     if (deleteConfirmText !== 'ELIMINAR') {
       Alert.alert('Error', 'Escribe ELIMINAR para confirmar.');
@@ -123,8 +121,8 @@ export default function AccountSettingsModal() {
     }
     setDeletingAccount(true);
     try {
-      // Eliminar la tienda primero (cascade puede manejarlo según tus FK)
-      if (tienda?.id) {
+      // Eliminar la tienda primero solo si es Administrador/dueño
+      if (tienda?.id && !isDomiciliario) {
         await supabase.from('tiendas').delete().eq('id', tienda.id);
       }
 
@@ -228,29 +226,33 @@ export default function AccountSettingsModal() {
 
                   <View style={styles.divider} />
 
-                  <TouchableOpacity
-                    style={styles.menuItem}
-                    onPress={() => setActiveSection('businessName')}
-                  >
-                    <MaterialCommunityIcons
-                      name="store-edit-outline"
-                      size={22}
-                      color={theme.colors.primary}
-                    />
-                    <View style={styles.menuItemText}>
-                      <Text style={styles.menuItemTitle}>Nombre del negocio</Text>
-                      <Text style={styles.menuItemSubtitle} numberOfLines={1}>
-                        {tienda?.nombre_tienda || '—'}
-                      </Text>
-                    </View>
-                    <MaterialCommunityIcons
-                      name="chevron-right"
-                      size={20}
-                      color={theme.colors.onSurfaceVariant}
-                    />
-                  </TouchableOpacity>
+                  {!isDomiciliario && (
+                    <>
+                      <TouchableOpacity
+                        style={styles.menuItem}
+                        onPress={() => setActiveSection('businessName')}
+                      >
+                        <MaterialCommunityIcons
+                          name="store-edit-outline"
+                          size={22}
+                          color={theme.colors.primary}
+                        />
+                        <View style={styles.menuItemText}>
+                          <Text style={styles.menuItemTitle}>Nombre del negocio</Text>
+                          <Text style={styles.menuItemSubtitle} numberOfLines={1}>
+                            {tienda?.nombre_tienda || '—'}
+                          </Text>
+                        </View>
+                        <MaterialCommunityIcons
+                          name="chevron-right"
+                          size={20}
+                          color={theme.colors.onSurfaceVariant}
+                        />
+                      </TouchableOpacity>
 
-                  <View style={styles.divider} />
+                      <View style={styles.divider} />
+                    </>
+                  )}
 
                   <TouchableOpacity
                     style={styles.menuItem}

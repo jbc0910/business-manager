@@ -4,7 +4,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 
 import EntregasScreen from './Repartidor/EntregasScreen';
-import TiendaAdminScreen from './TiendaAdminScreen'; // Domiciliario can see store info/logout here
+import DomiciliarioPerfilScreen from './Repartidor/DomiciliarioPerfilScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -40,7 +40,7 @@ export default function DomiciliarioDashboardScreen() {
       />
       <Tab.Screen 
         name="PerfilTab" 
-        component={TiendaAdminScreen}
+        component={DomiciliarioPerfilScreen}
         options={{
           tabBarLabel: 'Perfil',
           tabBarIcon: ({ color, size }) => (

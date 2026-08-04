@@ -11,7 +11,27 @@ import AccountSettingsModal from '../components/AccountSettingsModal';
 
 export default function TiendaAdminScreen({ navigation }) {
   const { tienda, setTienda } = useTienda();
-  const { signOut } = useAuth();
+  const { profile, signOut } = useAuth();
+
+  if (profile?.rol === 'Domiciliario') {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <MaterialCommunityIcons name="shield-lock-outline" size={64} color={theme.colors.error} />
+          <Text style={{ fontSize: 20, fontWeight: '700', color: theme.colors.onSurface, marginTop: 16 }}>
+            Acceso Restringido
+          </Text>
+          <Text style={{ fontSize: 14, color: theme.colors.onSurfaceVariant, textAlign: 'center', marginTop: 8, marginBottom: 24, lineHeight: 20 }}>
+            Los usuarios con rol Domiciliario no tienen permisos para consultar o modificar la configuración de la tienda.
+          </Text>
+          <TouchableOpacity style={styles.logoutBtn} onPress={signOut}>
+            <MaterialCommunityIcons name="logout" size={20} color={theme.colors.error} />
+            <Text style={styles.logoutText}>Cerrar Sesión</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const { control, handleSubmit, reset } = useForm({
     defaultValues: {
