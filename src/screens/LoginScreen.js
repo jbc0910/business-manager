@@ -50,6 +50,8 @@ export default function LoginScreen({ navigation }) {
         setGlobalError(
           error.message === 'Invalid login credentials'
             ? 'Email o contraseña incorrectos'
+            : error.message.toLowerCase().includes('email not confirmed')
+            ? 'Por favor confirma tu correo electrónico antes de iniciar sesión.'
             : error.message
         );
       }

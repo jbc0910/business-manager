@@ -1,14 +1,23 @@
 import { createClient } from '@supabase/supabase-js';
 import type { APIRoute } from 'astro';
 
-const supabaseUrl = import.meta.env.SUPABASE_URL;
-const supabaseKey = import.meta.env.SUPABASE_SERVICE_ROLE_KEY || import.meta.env.SUPABASE_ANON_KEY;
+const supabaseUrl =
+  import.meta.env.SUPABASE_URL ||
+  import.meta.env.PUBLIC_SUPABASE_URL ||
+  (typeof process !== 'undefined' ? process.env?.SUPABASE_URL || process.env?.PUBLIC_SUPABASE_URL : undefined);
+
+const supabaseKey =
+  import.meta.env.SUPABASE_SERVICE_ROLE_KEY ||
+  import.meta.env.SUPABASE_ANON_KEY ||
+  import.meta.env.PUBLIC_SUPABASE_ANON_KEY ||
+  (typeof process !== 'undefined' ? process.env?.SUPABASE_ANON_KEY || process.env?.PUBLIC_SUPABASE_ANON_KEY : undefined);
 
 if (!supabaseUrl || !supabaseKey) {
   console.error('[crear-pedido] Missing SUPABASE_URL or key in env');
 }
 
-const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+const supabaseAdmin = createClient(supabaseUrl || '', supabaseKey || '');
+
 
 export const POST: APIRoute = async ({ request }) => {
   try {

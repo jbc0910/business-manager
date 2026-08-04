@@ -9,22 +9,47 @@ export const AuthProvider = ({ children }) => {
   const [profile, setProfile] = useState(null);
   const [isGlobalLoading, setIsGlobalLoading] = useState(true);
 
-  const fetchProfile = async (userId) => {
+  const fetchProfile = async (sessionUser) => {
+    if (!sessionUser) return null;
     try {
       const { data, error } = await supabase
         .from('perfiles')
         .select('*')
-        .eq('id', userId)
+        .eq('id', sessionUser.id)
         .maybeSingle();
 
-      if (error) {
-        console.error('[AuthContext] Error fetching profile:', error);
-        return null;
+      if (!error && data) {
+        return data;
       }
-      return data;
+
+      console.warn('[AuthContext] Profile not found in perfiles table. Falling back to user_metadata.');
+      const meta = sessionUser.user_metadata || {};
+      const fallbackProfile = {
+        id: sessionUser.id,
+        nombre: meta.nombre || sessionUser.email?.split('@')[0] || 'Usuario',
+        rol: meta.rol || 'Administrador',
+        tienda_id: meta.tienda_id || null,
+      };
+
+      // Intentar sincronizar el perfil con la BD de forma asíncrona
+      supabase
+        .from('perfiles')
+        .upsert(fallbackProfile)
+        .then(({ error: upsertErr }) => {
+          if (upsertErr) console.warn('[AuthContext] Auto-upsert profile warning:', upsertErr.message);
+        })
+        .catch(() => {});
+
+      return fallbackProfile;
     } catch (e) {
       console.error('[AuthContext] Exception fetching profile:', e);
-      return null;
+      const meta = sessionUser?.user_metadata || {};
+      return {
+        id: sessionUser.id,
+        nombre: meta.nombre || sessionUser.email?.split('@')[0] || 'Usuario',
+        rol: meta.rol || 'Administrador',
+        tienda_id: meta.tienda_id || null,
+      };
     }
   };
 
@@ -36,7 +61,7 @@ export const AuthProvider = ({ children }) => {
         
         if (data.session?.user) {
           setUser(data.session.user);
-          const userProfile = await fetchProfile(data.session.user.id);
+          const userProfile = await fetchProfile(data.session.user);
           setProfile(userProfile);
           retryPendingImageDeletions();
         }
@@ -52,16 +77,7 @@ export const AuthProvider = ({ children }) => {
       try {
         if (session?.user) {
           setUser(session.user);
-          let userProfile = await fetchProfile(session.user.id);
-
-          // Si acaba de registrarse, reintentar la obtención del perfil
-          let retries = 0;
-          while (!userProfile && retries < 4) {
-            await new Promise(r => setTimeout(r, 800));
-            userProfile = await fetchProfile(session.user.id);
-            retries++;
-          }
-
+          let userProfile = await fetchProfile(session.user);
           setProfile(userProfile);
           
           if (event === 'SIGNED_IN') {

@@ -37,6 +37,7 @@
     "xlsx": "^0.18.5"
   },
   "scripts": {
+    "dev": "npm --prefix storefront run dev",
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",

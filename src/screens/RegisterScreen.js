@@ -86,8 +86,8 @@ export default function RegisterScreen({ navigation }) {
 
       if (signUpError) {
         setGlobalError(
-          signUpError.message === 'User already registered'
-            ? 'Este email ya está registrado'
+          signUpError.message === 'User already registered' || signUpError.message?.toLowerCase().includes('already registered')
+            ? 'Este email ya está registrado. Intenta iniciar sesión.'
             : signUpError.message
         );
         setLoading(false);
@@ -112,7 +112,7 @@ export default function RegisterScreen({ navigation }) {
       const { error: profileError } = await supabase.from('perfiles').upsert(newProfile);
 
       if (profileError) {
-        console.error('[RegisterScreen] Error guardando perfil desde cliente:', profileError.message);
+        console.warn('[RegisterScreen] Error guardando perfil desde cliente:', profileError.message);
       } else {
         console.log('[RegisterScreen] Perfil guardado con éxito desde cliente:', newProfile);
       }
@@ -122,7 +122,7 @@ export default function RegisterScreen({ navigation }) {
       }
 
       if (!data?.session) {
-        setGlobalError('Cuenta creada. Revisa tu email para confirmar el acceso.');
+        setGlobalError('¡Cuenta creada exitosamente! Revisa tu email para confirmar el acceso e iniciar sesión.');
       }
     } catch (err) {
       setGlobalError('Error de conexión. Intenta de nuevo.');
