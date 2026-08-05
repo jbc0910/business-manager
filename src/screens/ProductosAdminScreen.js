@@ -19,6 +19,7 @@ import { ProductFormModal } from '../components/ProductFormModal';
 import {
   listProductos,
   createProducto,
+  bulkCreateProductos,
   updateProducto,
   deleteProducto,
 } from '../services/products';
@@ -150,21 +151,16 @@ export default function ProductosAdminScreen({ navigation }) {
         return;
       }
 
-      // Insertar en lote
-      let exitosos = 0;
-      for (const r of registros) {
-        try {
-          const nuevo = await createProducto({ tiendaId: tienda.id, ...r, imageAsset: null });
-          setProductos(prev => [...prev, nuevo].sort((a, b) => a.nombre.localeCompare(b.nombre)));
-          exitosos++;
-        } catch (e) {
-          console.warn('[Import] Fila fallida:', r.nombre, e.message);
-        }
-      }
+      // Inserción en lote (bulk)
+      const nuevosProductos = await bulkCreateProductos(tienda.id, registros);
+      setProductos(prev => {
+        const combinados = [...prev, ...nuevosProductos];
+        return combinados.sort((a, b) => a.nombre.localeCompare(b.nombre));
+      });
 
       Alert.alert(
         'Importación completa',
-        `Se importaron ${exitosos} de ${registros.length} productos.`
+        `Se importaron exitosamente ${nuevosProductos.length} productos.`
       );
     } catch (err) {
       console.error('[Import]', err);

@@ -50,6 +50,13 @@ export const POST: APIRoute = async ({ request }) => {
 
     // 2. Validate each item
     for (const item of body.items) {
+      if (!item.qty || typeof item.qty !== 'number' || item.qty <= 0 || !Number.isInteger(item.qty)) {
+        return new Response(JSON.stringify({ error: `Cantidad inválida para el producto: ${item.nombre || 'desconocido'}` }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
       const realProduct = realProducts.find(p => p.id === item.id);
       
       if (!realProduct) {
@@ -59,8 +66,8 @@ export const POST: APIRoute = async ({ request }) => {
         });
       }
       
-      if (realProduct.stock <= 0) {
-        return new Response(JSON.stringify({ error: `El producto '${realProduct.nombre}' está agotado.` }), {
+      if (realProduct.stock <= 0 || item.qty > realProduct.stock) {
+        return new Response(JSON.stringify({ error: `El producto '${realProduct.nombre}' no tiene suficiente stock disponible.` }), {
           status: 400,
           headers: { 'Content-Type': 'application/json' },
         });
@@ -101,9 +108,7 @@ export const POST: APIRoute = async ({ request }) => {
     if (error) {
       console.error('[crear-pedido] Error insertando pedido:', JSON.stringify(error));
       return new Response(JSON.stringify({ 
-        error: error.message,
-        hint: error.hint || null,
-        code: error.code || null,
+        error: 'No se pudo registrar el pedido. Intenta nuevamente.'
       }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' },
@@ -117,7 +122,7 @@ export const POST: APIRoute = async ({ request }) => {
 
   } catch (e: any) {
     console.error('[crear-pedido] Unhandled error:', e);
-    return new Response(JSON.stringify({ error: e.message }), {
+    return new Response(JSON.stringify({ error: 'Error interno del servidor.' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });

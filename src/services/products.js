@@ -23,7 +23,8 @@ export async function uploadProductoImagen(tiendaId, asset) {
   }
 
   const extension = (asset.mimeType?.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
-  const path = `${tiendaId}/${Date.now()}.${extension}`;
+  const randomId = Math.random().toString(36).substring(2, 8);
+  const path = `${tiendaId}/${Date.now()}_${randomId}.${extension}`;
 
   const { error: uploadError } = await supabase.storage
     .from(PRODUCTOS_BUCKET)
@@ -102,6 +103,26 @@ export async function createProducto({ tiendaId, nombre, precio, stock, categori
     })
     .select('*, categoria:categorias(id, nombre, icono)')
     .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function bulkCreateProductos(tiendaId, registros) {
+  if (!registros || registros.length === 0) return [];
+  const payload = registros.map(r => ({
+    tienda_id: tiendaId,
+    nombre: r.nombre.trim(),
+    precio: r.precio,
+    stock: r.stock || 0,
+    precio_oferta: r.precio_oferta || null,
+    categoria_id: r.categoria_id || null,
+  }));
+
+  const { data, error } = await supabase
+    .from('productos')
+    .insert(payload)
+    .select('*, categoria:categorias(id, nombre, icono)');
 
   if (error) throw error;
   return data;
